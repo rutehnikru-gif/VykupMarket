@@ -129,6 +129,7 @@ button.btn.alt{background:var(--soft);color:var(--fg);border:1px solid var(--lin
         <label>Группа или канал <small>@имя или -100…</small><input type="text" id="botChat" placeholder="@vykupmarket"></label>
         <button type="button" class="btn alt" id="botFind">Найти мои группы</button>
         <div id="botChats" style="display:grid;gap:6px"></div>
+        <p class="note" id="upState"></p>
         <button type="button" class="btn alt" id="botTest">Проверить подключение</button>
         <p class="note" id="botStatus"></p>
         <hr style="border:0;border-top:1px solid var(--line);margin:4px 0">
@@ -337,7 +338,7 @@ $("save").onclick=async()=>{
 (function(){
   const m=location.hash.match(/cfg=([^&]+)/);
   if(!m)return;
-  try{const [t,ch]=decodeURIComponent(escape(atob(decodeURIComponent(m[1])))).split("\n");if(t)store("botToken",t);if(ch)store("botChat",ch);window.__cfg={t,ch};}catch(e){}
+  try{const [t,ch,up]=decodeURIComponent(escape(atob(decodeURIComponent(m[1])))).split("\n");if(t)store("botToken",t);if(ch)store("botChat",ch);if(up)store("botUp",up);window.__cfg={t,ch};}catch(e){}
 })();
 ["botToken","botChat"].forEach(k=>{
   const v=(window.__cfg&&(k==="botToken"?window.__cfg.t:window.__cfg.ch))||load(k);
@@ -346,7 +347,8 @@ $("save").onclick=async()=>{
   $(k).addEventListener("input",save);$(k).addEventListener("change",save);$(k).addEventListener("blur",save);
 });
 try{navigator.storage&&navigator.storage.persist&&navigator.storage.persist();}catch(e){}
-function botState(){
+function upState(){const u=load("botUp");$("upState").innerHTML=u?"📤 Надёжная загрузка фото: <b>включена</b> (через ваш личный чат с ботом)":"📤 Надёжная загрузка фото: <b>не включена</b>. Откройте своего бота в Telegram, нажмите <b>Старт</b> (или напишите ему «привет»), затем нажмите «Найти мои группы».";}
+function botState(){upState();
   const ok=$("botToken").value.trim()&&$("botChat").value.trim();
   $("botState").textContent=ok?`🤖 Бот настроен · публикация в ${$("botChat").value.trim()}`:"🤖 Бот не настроен: откройте «⚙️ Настройки публикации»";
 }
@@ -354,7 +356,7 @@ botState();
 $("botLink").onclick=async()=>{
   const t=$("botToken").value.trim(),ch=$("botChat").value.trim();
   if(!t||!ch){$("botStatus").textContent="Сначала заполните токен и группу.";return;}
-  const cfg=encodeURIComponent(btoa(unescape(encodeURIComponent(t+"\n"+ch))));
+  const cfg=encodeURIComponent(btoa(unescape(encodeURIComponent(t+"\n"+ch+"\n"+(load("botUp")||"")))));
   const url=location.href.split("#")[0]+"#cfg="+cfg;
   const out=$("botLinkOut");out.value=url;out.hidden=false;
   try{await navigator.clipboard.writeText(url);toast("Ссылка скопирована");}catch(e){out.focus();out.select();try{document.execCommand("copy");toast("Ссылка скопирована");}catch(_){toast("Скопируйте ссылку из поля");}}
@@ -393,7 +395,8 @@ $("botFind").onclick=async()=>{
     const r=await tgApi("getUpdates");
     if(!r.ok){st.textContent=tgError(r);return;}
     const chats=new Map();
-    for(const u of r.result){for(const k of["my_chat_member","message","channel_post","chat_member"]){const ch=u[k]&&u[k].chat;if(ch&&ch.type!=="private")chats.set(ch.id,ch);}}
+    let priv=null;for(const u of r.result){for(const k of["my_chat_member","message","channel_post","chat_member"]){const ch=u[k]&&u[k].chat;if(!ch)continue;if(ch.type==="private")priv=ch;else chats.set(ch.id,ch);}}
+    if(priv){store("botUp",String(priv.id));upState();}
     if(!chats.size){st.textContent="Бот пока не видит ни одной группы. Добавьте бота в группу (или удалите и добавьте заново), напишите в группе любое сообщение и нажмите кнопку ещё раз.";return;}
     st.textContent="Нажмите на свою группу:";
     chats.forEach(ch=>{const b=document.createElement("button");b.type="button";b.className="btn alt";
@@ -417,44 +420,85 @@ async function tgSend(method,fd,timeoutMs){
   const txt=await resp.text();
   try{return JSON.parse(txt);}catch(e){return{ok:false,error_code:resp.status,description:"HTTP "+resp.status};}
 }
-const LEVELS=[{side:1600,q:0.85,cq:0.9,t:90000},{side:1080,q:0.72,cq:0.8,t:120000},{side:800,q:0.65,cq:0.72,t:150000}];
+const LEVELS=[{side:1280,q:0.82,cq:0.88,t:90000},{side:1080,q:0.72,cq:0.8,t:120000},{side:800,q:0.65,cq:0.72,t:150000}];
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+// upload one image to the private chat with the bot, return file_id (small request, several retries)
+async function uploadOne(img,isCard,label,btn){
+  let last="";
+  for(let L=0;L<LEVELS.length;L++){
+    const lv=LEVELS[L];
+    btn.textContent=`${label}${L?` · попытка ${L+1}`:""}`;
+    const bl=isCard?await cardJpeg(lv.cq):await jpeg(img,lv.side,lv.q);
+    if(!bl)return{skip:true};
+    const f=new FormData();f.append("chat_id",load("botUp"));f.append("photo",bl,"p.jpg");f.append("disable_notification","true");
+    try{
+      const r=await tgSend("sendPhoto",f,lv.t);
+      if(r.ok){const ph=r.result.photo;const id=ph[ph.length-1].file_id;
+        const d=new FormData();d.append("chat_id",load("botUp"));d.append("message_id",r.result.message_id);tgSend("deleteMessage",d,20000).catch(()=>{});
+        return{id};}
+      if(/chat not found|blocked|deactivated/i.test(r.description||""))throw{fatal:"Бот не может написать вам в личку. Откройте бота в Telegram и нажмите «Старт»."};
+      last=r.description||"ошибка";
+    }catch(e){if(e&&e.fatal)throw e;last=e&&e.msg||"обрыв связи";}
+    await sleep(1200);
+  }
+  throw{fatal:`не удалось загрузить (${label.toLowerCase()}): ${last}`};
+}
+async function sendAlbumByIds(ids,text,btn){
+  let last="";
+  for(let i=0;i<4;i++){
+    btn.textContent=`Публикую пост${i?` · попытка ${i+1}`:""}`;
+    const fd=new FormData();fd.append("chat_id",chatId());
+    let method="sendMediaGroup";
+    if(ids.length===1){method="sendPhoto";fd.append("photo",ids[0]);fd.append("caption",text);}
+    else fd.append("media",JSON.stringify(ids.map((id,n)=>n?{type:"photo",media:id}:{type:"photo",media:id,caption:text})));
+    try{const r=await tgSend(method,fd,30000);if(r.ok)return;last=tgError(r);if(!/Too Many|retry/i.test(r.description||""))throw{fatal:last};await sleep(((r.parameters&&r.parameters.retry_after)||3)*1000);}
+    catch(e){if(e&&e.fatal)throw e;last=e&&e.msg||"обрыв связи";await sleep(1500);}
+  }
+  throw{fatal:"не удалось опубликовать пост: "+last};
+}
+async function publishReliable(text,btn){
+  const extra=photos.filter((p,i)=>i!==cover).slice(0,9);
+  const ids=[];let skipped=0;
+  ids.push((await uploadOne(null,true,`Загружаю карточку`,btn)).id);
+  for(let i=0;i<extra.length;i++){const r=await uploadOne(extra[i].img,false,`Загружаю фото ${i+1}/${extra.length}`,btn);if(r.skip)skipped++;else ids.push(r.id);}
+  await sendAlbumByIds(ids,text,btn);
+  return{count:ids.length,skipped};
+}
+async function publishDirect(text,btn){
+  const extraImgs=photos.filter((p,i)=>i!==cover).slice(0,9);
+  let lastErr="",skipped=0;
+  for(let L=0;L<LEVELS.length;L++){
+    const lv=LEVELS[L];
+    btn.textContent=L?`Публикую… попытка ${L+1}`:"Публикую…";
+    try{
+      const card=await cardJpeg(lv.cq);const blobs=[];skipped=0;
+      for(const p of extraImgs){const bl=await jpeg(p.img,lv.side,lv.q);if(bl)blobs.push(bl);else skipped++;}
+      let r;
+      if(!blobs.length){const f=new FormData();f.append("chat_id",chatId());f.append("photo",card,"card.jpg");f.append("caption",text);r=await tgSend("sendPhoto",f,lv.t);}
+      else{const fd=new FormData();fd.append("chat_id",chatId());const media=[{type:"photo",media:"attach://p0",caption:text}];fd.append("p0",card,"card.jpg");
+        blobs.forEach((bl,n)=>{fd.append("p"+(n+1),bl,`p${n+1}.jpg`);media.push({type:"photo",media:"attach://p"+(n+1)});});
+        fd.append("media",JSON.stringify(media));r=await tgSend("sendMediaGroup",fd,lv.t);}
+      if(r.ok)return{count:1+blobs.length,skipped};
+      if(r.error_code===413||/too big|too large|IMAGE_PROCESS_FAILED/i.test(r.description||"")){lastErr=r.description;continue;}
+      throw{fatal:tgError(r)};
+    }catch(e){if(e&&e.fatal)throw e;lastErr=e&&e.msg||String(e);await sleep(1200);}
+  }
+  throw{fatal:"обрыв при загрузке фото ("+lastErr+")"};
+}
 $("publish").onclick=async()=>{
   const btn=$("publish"),st=$("botStatus");
   if(!$("botToken").value.trim()||!chatId()){$("botBox").open=true;$("botBox").scrollIntoView({behavior:"smooth",block:"center"});toast("Сначала настройте бота");return;}
   const text=$("text").value.trim();
   if(text.length>1024){toast("Текст длиннее 1024 символов, сократите его");return;}
   btn.disabled=true;const old=btn.textContent;
-  const extraImgs=photos.filter((p,i)=>i!==cover).slice(0,9);
-  let lastErr="",done=false,skipped=0,sentCount=0;
-  for(let L=0;L<LEVELS.length&&!done;L++){
-    const lv=LEVELS[L];
-    btn.textContent=L?`Публикую… попытка ${L+1}, сжимаю сильнее`:"Публикую…";
-    try{
-      const card=await cardJpeg(lv.cq);
-      const blobs=[];skipped=0;
-      for(const p of extraImgs){const bl=await jpeg(p.img,lv.side,lv.q);if(bl)blobs.push(bl);else skipped++;}
-      let r;
-      if(!blobs.length){
-        const f=new FormData();f.append("chat_id",chatId());f.append("photo",card,"card.jpg");f.append("caption",text);
-        r=await tgSend("sendPhoto",f,lv.t);
-      }else{
-        const fd=new FormData();fd.append("chat_id",chatId());
-        const media=[{type:"photo",media:"attach://p0",caption:text}];fd.append("p0",card,"card.jpg");
-        blobs.forEach((bl,n)=>{fd.append("p"+(n+1),bl,`p${n+1}.jpg`);media.push({type:"photo",media:"attach://p"+(n+1)});});
-        fd.append("media",JSON.stringify(media));
-        r=await tgSend("sendMediaGroup",fd,lv.t);
-      }
-      if(r.ok){done=true;sentCount=1+blobs.length;break;}
-      if(r.error_code===413||/too big|too large|PHOTO_INVALID_DIMENSIONS|IMAGE_PROCESS_FAILED/i.test(r.description||"")){lastErr=r.description||"файлы слишком большие";continue;}
-      lastErr=tgError(r);break;
-    }catch(e){lastErr=e&&e.net?"обрыв при загрузке фото ("+e.msg+")":(e&&e.message)||String(e);}
-  }
-  if(done){
+  try{
+    const res=load("botUp")?await publishReliable(text,btn):await publishDirect(text,btn);
     toast("✅ Опубликовано");
-    st.textContent=skipped?`Опубликовано, но ${skipped} фото не удалось прочитать (формат HEIC?). Сохраните их как JPG и добавьте заново.`:`Опубликовано: ${sentCount} фото с подписью.`;
-  }else{
+    st.textContent=res.skipped?`Опубликовано, но ${res.skipped} фото не удалось прочитать (формат HEIC?). Сохраните их как JPG и добавьте заново.`:`Опубликовано: ${res.count} фото с подписью.`;
+  }catch(e){
     toast("Не опубликовано");$("botBox").open=true;
-    st.textContent="Не удалось опубликовать: "+lastErr+". Проверки проходят, значит, бот настроен верно: Telegram не принимает загрузку фото. Попробуйте другую сеть (Wi-Fi ↔ мобильный интернет) или включите VPN. Можно также отправить меньше фото.";
+    const why=(e&&e.fatal)||String(e);
+    st.textContent="Не удалось опубликовать: "+why+(load("botUp")?". Попробуйте другую сеть (Wi-Fi ↔ мобильный интернет) или VPN.":". Включите надёжную загрузку фото (см. строку «📤» выше): она отправляет фото по одному и почти не обрывается.");
   }
   btn.disabled=false;btn.textContent=old;
 };
