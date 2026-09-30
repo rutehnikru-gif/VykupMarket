@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#E8352B">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 44 44'%3E%3Ccircle cx='22' cy='22' r='22' fill='%23E8352B'/%3E%3C/svg%3E">
+<title>Карточка ВыкупМаркет</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Onest:wght@500;700;800;900&display=swap">
+<style>
+/* Layout: form column + live card preview, stacks to one column on phones */
+:root{
+  --bg:#F6F5F4; --surface:#FFFFFF; --fg:#1A1A1A; --muted:#6B6663; --line:#E4E1DE;
+  --red:#E8352B; --red-ink:#FFFFFF; --field:#FFFFFF;
+  --font:'Onest',"Segoe UI",Roboto,Arial,sans-serif;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#161413; --surface:#211E1D; --fg:#F2EFED; --muted:#A39D99; --line:#3A3533; --red:#F0463C; --red-ink:#FFFFFF; --field:#1A1817; color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#161413; --surface:#211E1D; --fg:#F2EFED; --muted:#A39D99; --line:#3A3533; --red:#F0463C; --red-ink:#FFFFFF; --field:#1A1817; color-scheme:dark}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--font);font-size:15px;line-height:1.45}
+.wrap{max-width:1100px;margin:0 auto;padding-inline:16px;padding-block:28px 48px}
+header{display:flex;align-items:center;gap:14px;margin-bottom:22px}
+header svg{flex:none}
+h1{font-size:26px;font-weight:900;margin:0;text-wrap:balance;letter-spacing:-.01em}
+header p{margin:2px 0 0;color:var(--muted)}
+.grid{display:grid;grid-template-columns:minmax(0,380px) minmax(0,1fr);gap:28px;align-items:start}
+@media (max-width:820px){.grid{grid-template-columns:minmax(0,1fr)}}
+form{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:20px;display:grid;gap:14px}
+label{display:grid;gap:5px;font-weight:700;font-size:13px}
+label span{color:var(--muted);font-weight:500}
+input[type=text]{font:inherit;font-size:15px;color:var(--fg);background:var(--field);border:1px solid var(--line);border-radius:9px;padding:10px 12px;width:100%;box-sizing:border-box}
+input[type=text]:focus-visible,button:focus-visible,.file:focus-within{outline:2px solid var(--red);outline-offset:2px}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.file{display:flex;align-items:center;justify-content:center;gap:8px;border:1.5px dashed var(--line);border-radius:10px;padding:14px;cursor:pointer;font-weight:700;color:var(--fg)}
+.file:hover{border-color:var(--red)}
+.file input{position:absolute;opacity:0;width:1px;height:1px}
+.preview{display:grid;gap:14px;justify-items:center}
+.preview img{width:100%;max-width:540px;border-radius:12px;box-shadow:0 1px 0 var(--line),0 12px 32px rgba(0,0,0,.12)}
+.actions{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;align-items:center}
+button{font:inherit;font-weight:800;font-size:15px;border:0;border-radius:999px;padding:12px 22px;cursor:pointer;background:var(--red);color:var(--red-ink)}
+.hint{color:var(--muted);font-size:13px;text-align:center;max-width:460px;margin:0}
+.tag{font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+</style>
+
+</head><body>
+<div class="wrap">
+  <header>
+    <svg width="44" height="44" viewBox="0 0 44 44" aria-hidden="true"><circle cx="22" cy="22" r="22" fill="#E8352B"/><path d="M9 26v-3c0-1 1-2 2-2l6-1 4-4h8l4 4 3 1c1 0 1 1 1 2v3z" fill="#fff"/><circle cx="15" cy="27" r="3" fill="#fff"/><circle cx="31" cy="27" r="3" fill="#fff"/></svg>
+    <div><h1>Карточка объявления</h1><p>Заполните поля, загрузите фото и сохраните картинку для поста в канале ВыкупМаркет.</p></div>
+  </header>
+
+  <div class="grid">
+    <form id="f" autocomplete="off">
+      <label class="file" id="fileLbl"><input type="file" id="photo" accept="image/*">📷 <span id="fileTxt" style="color:inherit;font-weight:700">Загрузить фото авто</span></label>
+      <label>Марка и модель<input type="text" id="model" value="Mercedes-Benz E200d"></label>
+      <label>Характеристики <span>через точку или запятую</span><input type="text" id="specs" value="2018 · дизель · полный привод · 160 000 км"></label>
+      <div class="row">
+        <label>Взнос<input type="text" id="vznos" value="от 0 ₽"></label>
+        <label>Срок<input type="text" id="srok" value="3–5 лет"></label>
+      </div>
+      <label>Платёж в месяц<input type="text" id="plat" value="по запросу"></label>
+      <div class="row">
+        <label>Город<input type="text" id="city" value="Москва"></label>
+        <label>Контакт<input type="text" id="contact" value="@ВашКонтакт"></label>
+      </div>
+      <p class="tag" style="margin:0">Сейчас в полях пример</p>
+    </form>
+
+    <section class="preview" aria-label="Готовая карточка">
+      <img id="out" alt="Карточка объявления">
+      <div class="actions">
+        <button type="button" id="share" hidden>Отправить в Telegram</button>
+        <button type="button" id="save">Скачать PNG</button>
+      </div>
+      <p class="hint" id="hint">На телефоне можно также удерживать картинку пальцем → «Сохранить».</p>
+    </section>
+  </div>
+</div>
+
+<canvas id="c" width="1080" height="1350" hidden></canvas>
+
+<script>
+const W=1080,H=1350,RED="#E8352B",INK="#1A1A1A";
+const CAR_BODY=new Path2D("M10,118 L10,92 Q10,76 30,72 L108,62 L158,26 Q168,18 184,18 L268,18 Q284,18 296,28 L342,62 L372,68 Q392,72 392,92 L392,118 Q392,124 386,124 L352,124 A40,40 0 0 0 272,124 L136,124 A40,40 0 0 0 56,124 L16,124 Q10,124 10,118 Z");
+const CAR_WIN=new Path2D("M132,62 L172,32 Q178,28 186,28 L222,28 L222,62 Z M236,28 L266,28 Q276,28 284,36 L314,62 L236,62 Z");
+const c=document.getElementById("c"),x=c.getContext("2d");
+let photo=null;
+const $=id=>document.getElementById(id);
+const F=(w,s)=>`${w} ${s}px Onest, "Segoe UI", Arial, sans-serif`;
+
+function car(cx,cy,s,body,win){
+  x.save();x.translate(cx,cy);x.scale(s,s);
+  x.fillStyle=body;x.fill(CAR_BODY);
+  for(const wx of [96,312]){x.beginPath();x.arc(wx,124,30,0,7);x.fill();}
+  x.fillStyle=win;x.fill(CAR_WIN);
+  for(const wx of [96,312]){x.beginPath();x.arc(wx,124,13,0,7);x.fill();}
+  x.restore();
+}
+function rr(X,Y,w,h,r){x.beginPath();x.roundRect(X,Y,w,h,r);}
+function fitText(t,w,max,min,weight){let s=max;x.font=F(weight,s);while(x.measureText(t).width>w&&s>min){s-=2;x.font=F(weight,s);}return s;}
+
+function drawPhoto(){
+  const ph=860;
+  if(photo){
+    const r=Math.max(W/photo.width,ph/photo.height),w=photo.width*r,h=photo.height*r;
+    x.save();x.beginPath();x.rect(0,0,W,ph);x.clip();x.drawImage(photo,(W-w)/2,(ph-h)/2,w,h);x.restore();
+  }else{
+    const g=x.createLinearGradient(0,0,0,ph);g.addColorStop(0,"#EDEBEA");g.addColorStop(1,"#D9D5D2");
+    x.fillStyle=g;x.fillRect(0,0,W,ph);
+    car(W/2-300,300,1.5,"#BDB7B3","#E6E3E1");
+    x.fillStyle="#8A8480";x.font=F(700,34);x.textAlign="center";x.fillText("Здесь будет фото автомобиля",W/2,640);x.textAlign="left";
+  }
+  const sh=x.createLinearGradient(0,0,0,200);sh.addColorStop(0,"rgba(0,0,0,.35)");sh.addColorStop(1,"rgba(0,0,0,0)");
+  x.fillStyle=sh;x.fillRect(0,0,W,200);
+}
+function drawBadge(){
+  rr(36,36,380,96,48);x.fillStyle="#fff";x.fill();
+  x.fillStyle=RED;x.beginPath();x.arc(84,84,36,0,7);x.fill();
+  car(84-37,84-14,0.185,"#fff",RED);
+  x.fillStyle=INK;x.fillRect(118,78,50,12);x.fillRect(148,90,8,12);x.fillRect(160,90,8,8);
+  x.font=F(900,36);x.fillStyle=INK;x.fillText("ВЫКУП",182,84);
+  x.font=F(800,22);x.fillStyle=RED;x.fillText("М А Р К Е Т",184,112);
+  const t="БЕЗ БАНКОВ";x.font=F(900,30);const tw=x.measureText(t).width;
+  rr(W-36-tw-56,46,tw+56,76,38);x.fillStyle=RED;x.fill();
+  x.fillStyle="#fff";x.fillText(t,W-36-tw-28,95);
+}
+function drawPanel(v){
+  x.fillStyle="#fff";rr(0,820,W,H-820,40);x.fill();x.fillRect(0,900,W,H-900);
+  const L=60;
+  x.fillStyle=INK;fitText(v.model,W-2*L,70,40,900);x.fillText(v.model,L,920);
+  x.fillStyle="#6B6663";fitText(v.specs,W-2*L,34,22,700);x.fillText(v.specs,L,972);
+  const bx=L,by=1015,bh=170,gap=20,bw=(W-2*L-2*gap)/3;
+  const cells=[["ВЗНОС",v.vznos,false],["ПЛАТЁЖ В МЕСЯЦ",v.plat,true],["СРОК ВЫКУПА",v.srok,false]];
+  cells.forEach(([lab,val,hot],i)=>{
+    const X=bx+i*(bw+gap);rr(X,by,bw,bh,22);x.fillStyle=hot?RED:"#F4F2F1";x.fill();
+    x.fillStyle=hot?"rgba(255,255,255,.85)":"#6B6663";x.font=F(800,22);x.fillText(lab,X+24,by+50);
+    x.fillStyle=hot?"#fff":INK;const s=fitText(val,bw-48,46,24,900);x.fillText(val,X+24,by+50+26+s);
+  });
+  x.fillStyle=INK;x.font=F(800,30);x.fillText("Аренда с правом выкупа",L,1265);
+  const right=[v.city,v.contact].filter(Boolean).join("  ·  ");
+  x.fillStyle=RED;fitText(right,440,30,20,800);x.textAlign="right";x.fillText(right,W-L,1265);x.textAlign="left";
+  x.fillStyle="#9A9490";x.font=F(700,22);x.fillText("без банков и справок о доходах",L,1302);
+}
+function vals(){const g=id=>$(id).value.trim();return{model:g("model")||"Марка и модель",specs:g("specs"),vznos:g("vznos")||"—",plat:g("plat")||"—",srok:g("srok")||"—",city:g("city"),contact:g("contact")};}
+function render(){
+  x.clearRect(0,0,W,H);drawPhoto();drawBadge();drawPanel(vals());
+  $("out").src=c.toDataURL("image/png");
+}
+$("f").addEventListener("input",render);
+$("f").addEventListener("submit",e=>e.preventDefault());
+$("photo").addEventListener("change",e=>{
+  const file=e.target.files[0];if(!file)return;
+  const rd=new FileReader();rd.onload=()=>{const im=new Image();im.onload=()=>{photo=im;$("fileTxt").textContent="Фото загружено · заменить";render();};im.src=rd.result;};rd.readAsDataURL(file);
+});
+(document.fonts?document.fonts.load('900 40px Onest').then(()=>document.fonts.load('700 30px Onest')).then(()=>document.fonts.load('800 30px Onest')).catch(()=>{}):Promise.resolve()).then(render);
+render();
+
+function fname(){return (vals().model.replace(/[^\p{L}\p{N} _-]/gu,"").trim()||"kartochka")+".png";}
+const getBlob=()=>new Promise(r=>c.toBlob(r,"image/png"));
+$("save").addEventListener("click",async()=>{
+  const b=await getBlob();const u=URL.createObjectURL(b);
+  const a=document.createElement("a");a.href=u;a.download=fname();document.body.appendChild(a);a.click();a.remove();
+  setTimeout(()=>URL.revokeObjectURL(u),4000);
+});
+(async()=>{
+  try{
+    const test=new File([new Blob(["x"],{type:"image/png"})],"t.png",{type:"image/png"});
+    if(navigator.canShare&&navigator.canShare({files:[test]})){
+      const btn=$("share");btn.hidden=false;
+      btn.addEventListener("click",async()=>{
+        const b=await getBlob();
+        try{await navigator.share({files:[new File([b],fname(),{type:"image/png"})]});}catch(e){}
+      });
+    }
+  }catch(e){}
+})();
+</script>
+
+</body></html>
