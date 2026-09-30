@@ -131,7 +131,12 @@ button.btn.alt{background:var(--soft);color:var(--fg);border:1px solid var(--lin
         <div id="botChats" style="display:grid;gap:6px"></div>
         <button type="button" class="btn alt" id="botTest">Проверить подключение</button>
         <p class="note" id="botStatus"></p>
+        <hr style="border:0;border-top:1px solid var(--line);margin:4px 0">
+        <p class="note"><b style="color:var(--fg)">Личная ссылка.</b> В неё встроены токен и группа. Открывайте страницу по ней, и настройки не потеряются, даже если браузер их сотрёт. <b style="color:var(--red)">Никому не пересылайте эту ссылку.</b></p>
+        <button type="button" class="btn" id="botLink">Скопировать личную ссылку</button>
+        <input type="text" id="botLinkOut" readonly hidden aria-label="Личная ссылка">
       </details>
+      <p class="note" id="botState"></p>
     </section>
   </div>
 </div>
@@ -328,7 +333,32 @@ $("save").onclick=async()=>{
 })();
 
 /* ---------- publish via bot ---------- */
-["botToken","botChat"].forEach(k=>{const v=load(k);if(v)$(k).value=v;$(k).addEventListener("input",()=>store(k,$(k).value.trim()));});
+// settings from personal link (#cfg=...) — the part after # is never sent to the server
+(function(){
+  const m=location.hash.match(/cfg=([^&]+)/);
+  if(!m)return;
+  try{const [t,ch]=decodeURIComponent(escape(atob(decodeURIComponent(m[1])))).split("\n");if(t)store("botToken",t);if(ch)store("botChat",ch);window.__cfg={t,ch};}catch(e){}
+})();
+["botToken","botChat"].forEach(k=>{
+  const v=(window.__cfg&&(k==="botToken"?window.__cfg.t:window.__cfg.ch))||load(k);
+  if(v)$(k).value=v;
+  const save=()=>{store(k,$(k).value.trim());botState();};
+  $(k).addEventListener("input",save);$(k).addEventListener("change",save);$(k).addEventListener("blur",save);
+});
+try{navigator.storage&&navigator.storage.persist&&navigator.storage.persist();}catch(e){}
+function botState(){
+  const ok=$("botToken").value.trim()&&$("botChat").value.trim();
+  $("botState").textContent=ok?`🤖 Бот настроен · публикация в ${$("botChat").value.trim()}`:"🤖 Бот не настроен: откройте «⚙️ Настройки публикации»";
+}
+botState();
+$("botLink").onclick=async()=>{
+  const t=$("botToken").value.trim(),ch=$("botChat").value.trim();
+  if(!t||!ch){$("botStatus").textContent="Сначала заполните токен и группу.";return;}
+  const cfg=encodeURIComponent(btoa(unescape(encodeURIComponent(t+"\n"+ch))));
+  const url=location.href.split("#")[0]+"#cfg="+cfg;
+  const out=$("botLinkOut");out.value=url;out.hidden=false;
+  try{await navigator.clipboard.writeText(url);toast("Ссылка скопирована");}catch(e){out.focus();out.select();try{document.execCommand("copy");toast("Ссылка скопирована");}catch(_){toast("Скопируйте ссылку из поля");}}
+};
 const tgApi=(m,body)=>fetch(`https://api.telegram.org/bot${$("botToken").value.trim()}/${m}`,{method:"POST",body}).then(r=>r.json());
 function chatId(){let v=$("botChat").value.trim();if(!v)return"";if(v.includes("t.me/"))v="@"+v.split("t.me/")[1].split(/[/?]/)[0];if(!v.startsWith("@")&&!/^-?\d+$/.test(v))v="@"+v;return v;}
 function tgError(r){const d=(r&&r.description)||"";
@@ -368,29 +398,64 @@ $("botFind").onclick=async()=>{
     st.textContent="Нажмите на свою группу:";
     chats.forEach(ch=>{const b=document.createElement("button");b.type="button";b.className="btn alt";
       b.textContent=`${ch.title||ch.username} ${ch.type==="channel"?"(канал)":"(группа)"}`;
-      b.onclick=()=>{$("botChat").value=ch.username?"@"+ch.username:String(ch.id);store("botChat",$("botChat").value);box.innerHTML="";st.textContent="Группа выбрана. Нажмите «Проверить подключение».";};
+      b.onclick=()=>{$("botChat").value=ch.username?"@"+ch.username:String(ch.id);store("botChat",$("botChat").value);botState();box.innerHTML="";st.textContent="Группа выбрана. Нажмите «Проверить подключение».";};
       box.appendChild(b);});
   }catch(e){st.textContent="Нет связи с Telegram. Проверьте интернет (или VPN) и попробуйте ещё раз.";}
 };
+function jpeg(img,maxSide,q){return new Promise(res=>{
+  const w=img.naturalWidth,h=img.naturalHeight;if(!w||!h)return res(null);
+  const k=Math.min(1,maxSide/Math.max(w,h));const cv=document.createElement("canvas");cv.width=Math.round(w*k);cv.height=Math.round(h*k);
+  try{cv.getContext("2d").drawImage(img,0,0,cv.width,cv.height);cv.toBlob(bl=>res(bl&&bl.size?bl:null),"image/jpeg",q);}catch(e){res(null);}
+});}
+const cardJpeg=q=>new Promise(r=>c.toBlob(r,"image/jpeg",q));
+async function tgSend(method,fd,timeoutMs){
+  const ctl=new AbortController();const tm=setTimeout(()=>ctl.abort(),timeoutMs);
+  let resp;
+  try{resp=await fetch(`https://api.telegram.org/bot${$("botToken").value.trim()}/${method}`,{method:"POST",body:fd,signal:ctl.signal});}
+  catch(e){clearTimeout(tm);throw{net:true,msg:e.name==="AbortError"?"слишком долго, отправка прервана":(e.message||String(e))};}
+  clearTimeout(tm);
+  const txt=await resp.text();
+  try{return JSON.parse(txt);}catch(e){return{ok:false,error_code:resp.status,description:"HTTP "+resp.status};}
+}
+const LEVELS=[{side:1600,q:0.85,cq:0.9,t:90000},{side:1080,q:0.72,cq:0.8,t:120000},{side:800,q:0.65,cq:0.72,t:150000}];
 $("publish").onclick=async()=>{
-  const btn=$("publish");
+  const btn=$("publish"),st=$("botStatus");
   if(!$("botToken").value.trim()||!chatId()){$("botBox").open=true;$("botBox").scrollIntoView({behavior:"smooth",block:"center"});toast("Сначала настройте бота");return;}
   const text=$("text").value.trim();
   if(text.length>1024){toast("Текст длиннее 1024 символов, сократите его");return;}
-  btn.disabled=true;const old=btn.textContent;btn.textContent="Публикую…";
-  try{
-    const card=await cardBlob();let r;
-    const extra=photos.filter((p,i)=>i!==cover).slice(0,9);
-    if(!extra.length){
-      const f=new FormData();f.append("chat_id",chatId());f.append("photo",card,"card.jpg");f.append("caption",text);r=await tgApi("sendPhoto",f);
-    }else{
-      const fd=new FormData();fd.append("chat_id",chatId());
-      const media=[{type:"photo",media:"attach://p0",caption:text}];fd.append("p0",card,"card.jpg");
-      for(let n=0;n<extra.length;n++){fd.append("p"+(n+1),await shrink(extra[n].img),`p${n+1}.jpg`);media.push({type:"photo",media:"attach://p"+(n+1)});}
-      fd.append("media",JSON.stringify(media));r=await tgApi("sendMediaGroup",fd);
-    }
-    if(r.ok)toast("✅ Опубликовано");else{toast("Не опубликовано");$("botBox").open=true;$("botStatus").textContent=tgError(r);}
-  }catch(e){toast("Нет связи с Telegram");$("botBox").open=true;$("botStatus").textContent="Нет связи с Telegram. Проверьте интернет (или VPN) и попробуйте ещё раз.";}
+  btn.disabled=true;const old=btn.textContent;
+  const extraImgs=photos.filter((p,i)=>i!==cover).slice(0,9);
+  let lastErr="",done=false,skipped=0,sentCount=0;
+  for(let L=0;L<LEVELS.length&&!done;L++){
+    const lv=LEVELS[L];
+    btn.textContent=L?`Публикую… попытка ${L+1}, сжимаю сильнее`:"Публикую…";
+    try{
+      const card=await cardJpeg(lv.cq);
+      const blobs=[];skipped=0;
+      for(const p of extraImgs){const bl=await jpeg(p.img,lv.side,lv.q);if(bl)blobs.push(bl);else skipped++;}
+      let r;
+      if(!blobs.length){
+        const f=new FormData();f.append("chat_id",chatId());f.append("photo",card,"card.jpg");f.append("caption",text);
+        r=await tgSend("sendPhoto",f,lv.t);
+      }else{
+        const fd=new FormData();fd.append("chat_id",chatId());
+        const media=[{type:"photo",media:"attach://p0",caption:text}];fd.append("p0",card,"card.jpg");
+        blobs.forEach((bl,n)=>{fd.append("p"+(n+1),bl,`p${n+1}.jpg`);media.push({type:"photo",media:"attach://p"+(n+1)});});
+        fd.append("media",JSON.stringify(media));
+        r=await tgSend("sendMediaGroup",fd,lv.t);
+      }
+      if(r.ok){done=true;sentCount=1+blobs.length;break;}
+      if(r.error_code===413||/too big|too large|PHOTO_INVALID_DIMENSIONS|IMAGE_PROCESS_FAILED/i.test(r.description||"")){lastErr=r.description||"файлы слишком большие";continue;}
+      lastErr=tgError(r);break;
+    }catch(e){lastErr=e&&e.net?"обрыв при загрузке фото ("+e.msg+")":(e&&e.message)||String(e);}
+  }
+  if(done){
+    toast("✅ Опубликовано");
+    st.textContent=skipped?`Опубликовано, но ${skipped} фото не удалось прочитать (формат HEIC?). Сохраните их как JPG и добавьте заново.`:`Опубликовано: ${sentCount} фото с подписью.`;
+  }else{
+    toast("Не опубликовано");$("botBox").open=true;
+    st.textContent="Не удалось опубликовать: "+lastErr+". Проверки проходят, значит, бот настроен верно: Telegram не принимает загрузку фото. Попробуйте другую сеть (Wi-Fi ↔ мобильный интернет) или включите VPN. Можно также отправить меньше фото.";
+  }
   btn.disabled=false;btn.textContent=old;
 };
 
