@@ -116,6 +116,10 @@ button.btn.alt{background:var(--soft);color:var(--fg);border:1px solid var(--lin
       <img id="card" alt="Карточка объявления">
       <textarea id="text" aria-label="Текст поста" spellcheck="false"></textarea>
       <div class="actions">
+        <div class="seg main" role="radiogroup" aria-label="Как публиковать">
+          <label><input type="radio" name="pubMode" value="split" checked> Карточка крупно + фото под ней</label>
+          <label><input type="radio" name="pubMode" value="album"> Всё одним альбомом</label>
+        </div>
         <button type="button" class="btn main" id="publish">Опубликовать в группу</button>
         <button type="button" class="btn alt main" id="share" hidden>Поделиться (фото и текст отдельно)</button>
         <button type="button" class="btn alt" id="copy">Копировать текст</button>
@@ -449,23 +453,29 @@ async function sendAlbumByIds(ids,text,btn){
     btn.textContent=`Публикую пост${i?` · попытка ${i+1}`:""}`;
     const fd=new FormData();fd.append("chat_id",chatId());
     let method="sendMediaGroup";
-    if(ids.length===1){method="sendPhoto";fd.append("photo",ids[0]);fd.append("caption",text);}
-    else fd.append("media",JSON.stringify(ids.map((id,n)=>n?{type:"photo",media:id}:{type:"photo",media:id,caption:text})));
+    if(ids.length===1){method="sendPhoto";fd.append("photo",ids[0]);if(text)fd.append("caption",text);}
+    else fd.append("media",JSON.stringify(ids.map((id,n)=>n||!text?{type:"photo",media:id}:{type:"photo",media:id,caption:text})));
     try{const r=await tgSend(method,fd,30000);if(r.ok)return;last=tgError(r);if(!/Too Many|retry/i.test(r.description||""))throw{fatal:last};await sleep(((r.parameters&&r.parameters.retry_after)||3)*1000);}
     catch(e){if(e&&e.fatal)throw e;last=e&&e.msg||"обрыв связи";await sleep(1500);}
   }
   throw{fatal:"не удалось опубликовать пост: "+last};
 }
+function orderedPhotos(){const p=photos[cover];return (p?[p,...photos.filter((_,i)=>i!==cover)]:[]).slice(0,9);}
+function pubMode(){const r=document.querySelector('input[name=pubMode]:checked');return r?r.value:"split";}
+document.querySelectorAll('input[name=pubMode]').forEach(r=>{if(load("pubMode")===r.value)r.checked=true;r.addEventListener("change",()=>store("pubMode",r.value));});
 async function publishReliable(text,btn){
-  const extra=photos.filter((p,i)=>i!==cover).slice(0,9);
+  const extra=orderedPhotos();
   const ids=[];let skipped=0;
   ids.push((await uploadOne(null,true,`Загружаю карточку`,btn)).id);
   for(let i=0;i<extra.length;i++){const r=await uploadOne(extra[i].img,false,`Загружаю фото ${i+1}/${extra.length}`,btn);if(r.skip)skipped++;else ids.push(r.id);}
-  await sendAlbumByIds(ids,text,btn);
+  if(pubMode()==="split"&&ids.length>1){
+    await sendAlbumByIds([ids[0]],text,btn);
+    btn.textContent="Публикую фото";await sendAlbumByIds(ids.slice(1),"",btn);
+  }else await sendAlbumByIds(ids,text,btn);
   return{count:ids.length,skipped};
 }
 async function publishDirect(text,btn){
-  const extraImgs=photos.filter((p,i)=>i!==cover).slice(0,9);
+  const extraImgs=orderedPhotos();
   let lastErr="",skipped=0;
   for(let L=0;L<LEVELS.length;L++){
     const lv=LEVELS[L];
