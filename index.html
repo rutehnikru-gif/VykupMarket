@@ -116,11 +116,22 @@ button.btn.alt{background:var(--soft);color:var(--fg);border:1px solid var(--lin
       <img id="card" alt="Карточка объявления">
       <textarea id="text" aria-label="Текст поста" spellcheck="false"></textarea>
       <div class="actions">
-        <button type="button" class="btn main" id="share" hidden>Отправить в Telegram</button>
+        <button type="button" class="btn main" id="publish">Опубликовать в группу</button>
+        <button type="button" class="btn alt main" id="share" hidden>Поделиться (фото и текст отдельно)</button>
         <button type="button" class="btn alt" id="copy">Копировать текст</button>
         <button type="button" class="btn alt" id="save">Скачать карточку</button>
       </div>
       <p class="note" id="shareNote">Текст можно поправить прямо в поле перед отправкой.</p>
+      <details class="panel" id="botBox">
+        <summary style="font-weight:800;cursor:pointer">⚙️ Настройки публикации (бот)</summary>
+        <p class="note">Один раз укажите токен бота и канал. Они хранятся только на этом устройстве и не попадают в файл на GitHub.</p>
+        <label>Токен бота <small>от @BotFather</small><input type="password" id="botToken" placeholder="123456789:AA..." autocomplete="off"></label>
+        <label>Группа или канал <small>@имя или -100…</small><input type="text" id="botChat" placeholder="@vykupmarket"></label>
+        <button type="button" class="btn alt" id="botFind">Найти мои группы</button>
+        <div id="botChats" style="display:grid;gap:6px"></div>
+        <button type="button" class="btn alt" id="botTest">Проверить подключение</button>
+        <p class="note" id="botStatus"></p>
+      </details>
     </section>
   </div>
 </div>
@@ -315,6 +326,73 @@ $("save").onclick=async()=>{
     };
   }catch(e){}
 })();
+
+/* ---------- publish via bot ---------- */
+["botToken","botChat"].forEach(k=>{const v=load(k);if(v)$(k).value=v;$(k).addEventListener("input",()=>store(k,$(k).value.trim()));});
+const tgApi=(m,body)=>fetch(`https://api.telegram.org/bot${$("botToken").value.trim()}/${m}`,{method:"POST",body}).then(r=>r.json());
+function chatId(){let v=$("botChat").value.trim();if(!v)return"";if(v.includes("t.me/"))v="@"+v.split("t.me/")[1].split(/[/?]/)[0];if(!v.startsWith("@")&&!/^-?\d+$/.test(v))v="@"+v;return v;}
+function tgError(r){const d=(r&&r.description)||"";
+  if(/Unauthorized/i.test(d))return"Неверный токен бота. Скопируйте его заново у @BotFather.";
+  if(/chat not found/i.test(d))return"Канал не найден. Проверьте имя канала и что бот добавлен в канал.";
+  if(/not enough rights|administrator|member/i.test(d))return"Бот не может писать в канал. Сделайте его администратором с правом публикации.";
+  return"Telegram ответил: "+(d||"неизвестная ошибка");}
+function shrink(img){return new Promise(res=>{const m=1920,k=Math.min(1,m/Math.max(img.naturalWidth,img.naturalHeight));const cv=document.createElement("canvas");cv.width=Math.round(img.naturalWidth*k);cv.height=Math.round(img.naturalHeight*k);cv.getContext("2d").drawImage(img,0,0,cv.width,cv.height);cv.toBlob(res,"image/jpeg",0.88);});}
+$("botTest").onclick=async()=>{
+  const st=$("botStatus");
+  if(!$("botToken").value.trim()||!chatId()){st.textContent="Заполните токен и канал.";return;}
+  st.textContent="Проверяю…";
+  try{
+    const me=await tgApi("getMe");if(!me.ok){st.textContent=tgError(me);return;}
+    const fd=new FormData();fd.append("chat_id",chatId());
+    const ch=await tgApi("getChat",fd);if(!ch.ok){st.textContent=tgError(ch);return;}
+    const fd2=new FormData();fd2.append("chat_id",chatId());fd2.append("user_id",me.result.id);
+    const mem=await tgApi("getChatMember",fd2);
+    const isChannel=ch.result.type==="channel",s=mem.ok?mem.result.status:"";
+    const okAdmin=(s==="administrator"||s==="creator")&&(!isChannel||mem.result.can_post_messages!==false);
+    const okGroup=!isChannel&&(okAdmin||(s==="member")||(s==="restricted"&&mem.result.can_send_photos!==false&&mem.result.can_send_messages!==false));
+    const where=isChannel?"канал":"группу";
+    if(okAdmin||okGroup)st.textContent=`✅ Всё готово: бот @${me.result.username} может публиковать в ${where} «${ch.result.title}».`;
+    else st.textContent=isChannel?`Бот найден, но он не администратор канала «${ch.result.title}». Добавьте его в администраторы с правом «Публикация сообщений».`:`Бот не состоит в группе «${ch.result.title}» или ему запрещено писать. Добавьте бота в группу (лучше администратором).`;
+  }catch(e){st.textContent="Нет связи с Telegram. Проверьте интернет (или VPN) и попробуйте ещё раз.";}
+};
+$("botFind").onclick=async()=>{
+  const st=$("botStatus"),box=$("botChats");box.innerHTML="";
+  if(!$("botToken").value.trim()){st.textContent="Сначала вставьте токен бота.";return;}
+  st.textContent="Ищу…";
+  try{
+    const r=await tgApi("getUpdates");
+    if(!r.ok){st.textContent=tgError(r);return;}
+    const chats=new Map();
+    for(const u of r.result){for(const k of["my_chat_member","message","channel_post","chat_member"]){const ch=u[k]&&u[k].chat;if(ch&&ch.type!=="private")chats.set(ch.id,ch);}}
+    if(!chats.size){st.textContent="Бот пока не видит ни одной группы. Добавьте бота в группу (или удалите и добавьте заново), напишите в группе любое сообщение и нажмите кнопку ещё раз.";return;}
+    st.textContent="Нажмите на свою группу:";
+    chats.forEach(ch=>{const b=document.createElement("button");b.type="button";b.className="btn alt";
+      b.textContent=`${ch.title||ch.username} ${ch.type==="channel"?"(канал)":"(группа)"}`;
+      b.onclick=()=>{$("botChat").value=ch.username?"@"+ch.username:String(ch.id);store("botChat",$("botChat").value);box.innerHTML="";st.textContent="Группа выбрана. Нажмите «Проверить подключение».";};
+      box.appendChild(b);});
+  }catch(e){st.textContent="Нет связи с Telegram. Проверьте интернет (или VPN) и попробуйте ещё раз.";}
+};
+$("publish").onclick=async()=>{
+  const btn=$("publish");
+  if(!$("botToken").value.trim()||!chatId()){$("botBox").open=true;$("botBox").scrollIntoView({behavior:"smooth",block:"center"});toast("Сначала настройте бота");return;}
+  const text=$("text").value.trim();
+  if(text.length>1024){toast("Текст длиннее 1024 символов, сократите его");return;}
+  btn.disabled=true;const old=btn.textContent;btn.textContent="Публикую…";
+  try{
+    const card=await cardBlob();let r;
+    const extra=photos.filter((p,i)=>i!==cover).slice(0,9);
+    if(!extra.length){
+      const f=new FormData();f.append("chat_id",chatId());f.append("photo",card,"card.jpg");f.append("caption",text);r=await tgApi("sendPhoto",f);
+    }else{
+      const fd=new FormData();fd.append("chat_id",chatId());
+      const media=[{type:"photo",media:"attach://p0",caption:text}];fd.append("p0",card,"card.jpg");
+      for(let n=0;n<extra.length;n++){fd.append("p"+(n+1),await shrink(extra[n].img),`p${n+1}.jpg`);media.push({type:"photo",media:"attach://p"+(n+1)});}
+      fd.append("media",JSON.stringify(media));r=await tgApi("sendMediaGroup",fd);
+    }
+    if(r.ok)toast("✅ Опубликовано");else{toast("Не опубликовано");$("botBox").open=true;$("botStatus").textContent=tgError(r);}
+  }catch(e){toast("Нет связи с Telegram");$("botBox").open=true;$("botStatus").textContent="Нет связи с Telegram. Проверьте интернет (или VPN) и попробуйте ещё раз.";}
+  btn.disabled=false;btn.textContent=old;
+};
 
 drawTerms();update();
 if(document.fonts)document.fonts.ready.then(update);
