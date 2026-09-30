@@ -52,7 +52,7 @@ input:focus-visible,select:focus-visible,button:focus-visible{outline:2px solid 
 .seg input{accent-color:var(--red)}
 .out{display:grid;gap:14px;position:sticky;top:12px}
 @media (max-width:860px){.out{position:static}}
-.out img{width:100%;max-width:520px;justify-self:center;border-radius:12px;box-shadow:0 10px 28px rgba(0,0,0,.14)}
+.out img{width:100%;max-width:680px;justify-self:center;border-radius:12px;box-shadow:0 10px 28px rgba(0,0,0,.14)}
 textarea{font:inherit;font-size:15px;line-height:1.5;color:var(--fg);background:var(--field);border:1px solid var(--line);border-radius:10px;padding:12px;width:100%;min-height:260px;resize:vertical}
 .actions{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .actions .main{grid-column:1/-1}
@@ -117,9 +117,10 @@ button.btn.alt{background:var(--soft);color:var(--fg);border:1px solid var(--lin
       <textarea id="text" aria-label="Текст поста" spellcheck="false"></textarea>
       <div class="actions">
         <div class="seg main" role="radiogroup" aria-label="Как публиковать">
-          <label><input type="radio" name="pubMode" value="split" checked> Карточка крупно + фото под ней</label>
-          <label><input type="radio" name="pubMode" value="album"> Всё одним альбомом</label>
+          <label><input type="radio" name="pubMode" value="album" checked> Одним постом: карточка большая сверху, фото под ней</label>
+          <label><input type="radio" name="pubMode" value="split"> Карточка отдельным сообщением, фото альбомом ниже</label>
         </div>
+        <p class="note main" id="albumHint"></p>
         <button type="button" class="btn main" id="publish">Опубликовать в группу</button>
         <button type="button" class="btn alt main" id="share" hidden>Поделиться (фото и текст отдельно)</button>
         <button type="button" class="btn alt" id="copy">Копировать текст</button>
@@ -145,12 +146,12 @@ button.btn.alt{background:var(--soft);color:var(--fg);border:1px solid var(--lin
     </section>
   </div>
 </div>
-<canvas id="c" width="1080" height="1350" hidden></canvas>
+<canvas id="c" width="1600" height="1000" hidden></canvas>
 <div class="toast" id="toast"></div>
 
 <script>
 const $=id=>document.getElementById(id);
-const W=1080,H=1350,RED="#E8352B",INK="#1A1A1A";
+const W=1600,H=1000,RED="#E8352B",INK="#1A1A1A";
 const c=$("c"),x=c.getContext("2d");
 const CAR_BODY=new Path2D("M10,118 L10,92 Q10,76 30,72 L108,62 L158,26 Q168,18 184,18 L268,18 Q284,18 296,28 L342,62 L372,68 Q392,72 392,92 L392,118 Q392,124 386,124 L352,124 A40,40 0 0 0 272,124 L136,124 A40,40 0 0 0 56,124 L16,124 Q10,124 10,118 Z");
 const CAR_WIN=new Path2D("M132,62 L172,32 Q178,28 186,28 L222,28 L222,62 Z M236,28 L266,28 Q276,28 284,36 L314,62 L236,62 Z");
@@ -210,7 +211,7 @@ function drawThumbs(){
     b.appendChild(d);
   });
   $("coverNote").hidden=photos.length<2;
-  $("fileTxt").textContent=photos.length?`Фото: ${photos.length} · добавить ещё`:"Добавить фото (3–5 шт.)";
+  albumHint();$("fileTxt").textContent=photos.length?`Фото: ${photos.length} · добавить ещё`:"Добавить фото (3–5 шт.)";
 }
 
 /* ---------- data ---------- */
@@ -251,41 +252,39 @@ function rr(X,Y,w,h,r){x.beginPath();if(x.roundRect)x.roundRect(X,Y,w,h,r);else 
 function fit(t,w,max,min,wt){let s=max;x.font=F(wt,s);while(x.measureText(t).width>w&&s>min){s-=2;x.font=F(wt,s);}return s;}
 function drawCard(d){
   x.clearRect(0,0,W,H);
-  const ph=860,p=photos[cover];
-  if(p&&p.img.naturalWidth){const im=p.img,r=Math.max(W/im.naturalWidth,ph/im.naturalHeight),w=im.naturalWidth*r,h=im.naturalHeight*r;x.save();x.beginPath();x.rect(0,0,W,ph);x.clip();x.drawImage(im,(W-w)/2,(ph-h)/2,w,h);x.restore();}
-  else{const g=x.createLinearGradient(0,0,0,ph);g.addColorStop(0,"#EDEBEA");g.addColorStop(1,"#D9D5D2");x.fillStyle=g;x.fillRect(0,0,W,ph);car(W/2-300,300,1.5,"#BDB7B3","#E6E3E1");x.fillStyle="#8A8480";x.font=F(700,34);x.textAlign="center";x.fillText("Добавьте фото автомобиля",W/2,640);x.textAlign="left";}
-  const sh=x.createLinearGradient(0,0,0,200);sh.addColorStop(0,"rgba(0,0,0,.35)");sh.addColorStop(1,"rgba(0,0,0,0)");x.fillStyle=sh;x.fillRect(0,0,W,200);
-  // badge
+  const PW=980,p=photos[cover];
+  // photo (left)
+  if(p&&p.img.naturalWidth){const im=p.img,r=Math.max(PW/im.naturalWidth,H/im.naturalHeight),w=im.naturalWidth*r,h=im.naturalHeight*r;x.save();x.beginPath();x.rect(0,0,PW,H);x.clip();x.drawImage(im,(PW-w)/2,(H-h)/2,w,h);x.restore();}
+  else{const g=x.createLinearGradient(0,0,0,H);g.addColorStop(0,"#EDEBEA");g.addColorStop(1,"#D9D5D2");x.fillStyle=g;x.fillRect(0,0,PW,H);car(PW/2-300,330,1.5,"#BDB7B3","#E6E3E1");x.fillStyle="#8A8480";x.font=F(700,34);x.textAlign="center";x.fillText("Добавьте фото автомобиля",PW/2,660);x.textAlign="left";}
+  const sh=x.createLinearGradient(0,0,0,200);sh.addColorStop(0,"rgba(0,0,0,.35)");sh.addColorStop(1,"rgba(0,0,0,0)");x.fillStyle=sh;x.fillRect(0,0,PW,200);
+  // logo badge on photo
   rr(36,36,380,96,48);x.fillStyle="#fff";x.fill();
   x.fillStyle=RED;x.beginPath();x.arc(84,84,36,0,7);x.fill();car(47,70,0.185,"#fff",RED);
   x.fillStyle=INK;x.fillRect(118,78,50,12);x.fillRect(148,90,8,12);x.fillRect(160,90,8,8);
   x.font=F(900,36);x.fillText("ВЫКУП",182,84);x.font=F(800,22);x.fillStyle=RED;x.fillText("М А Р К Е Т",184,112);
-  const t="БЕЗ БАНКОВ";x.font=F(900,30);const tw=x.measureText(t).width;rr(W-36-tw-56,46,tw+56,76,38);x.fillStyle=RED;x.fill();x.fillStyle="#fff";x.fillText(t,W-36-tw-28,95);
-  // panel
-  x.fillStyle="#fff";rr(0,820,W,H-820,40);x.fill();x.fillRect(0,900,W,H-900);
-  const L=60;
-  const title=[d.model||"Марка и модель",d.year].filter(Boolean).join(" · ");
-  x.fillStyle=INK;fit(title,W-2*L,70,40,900);x.fillText(title,L,920);
-  const sub=d.color||"Аренда с правом выкупа";
-  x.fillStyle="#6B6663";fit(sub,W-2*L,34,22,700);x.fillText(sub,L,972);
-  // cells
-  const vzs=[d.vznosN,...d.ts.map(t=>t.vn)].filter(n=>n>0);
-  const minV=vzs.length?Math.min(...vzs):0;
-  const vzText=vzs.length?(new Set(vzs).size>1?"от ":"")+minV.toLocaleString("ru-RU").replace(/ /g," ")+" ₽":"—";
-  const ps=d.ts.map(t=>t.pn);const minP=ps.length?Math.min(...ps):0;
-  const pText=ps.length?(ps.length>1?"от ":"")+minP.toLocaleString("ru-RU").replace(/ /g," ")+" ₽":"—";
+  // right panel
+  x.fillStyle="#fff";x.fillRect(PW,0,W-PW,H);
+  const L=PW+48,CW=W-PW-96;
+  const t="БЕЗ БАНКОВ";x.font=F(900,26);const tw=x.measureText(t).width;rr(L,44,tw+44,60,30);x.fillStyle=RED;x.fill();x.fillStyle="#fff";x.fillText(t,L+22,84);
+  x.fillStyle=INK;fit(d.model||"Марка и модель",CW,62,34,900);x.fillText(d.model||"Марка и модель",L,190);
+  const sub=[d.year?d.year+" год":"",d.color].filter(Boolean).join(" · ")||"Аренда с правом выкупа";
+  x.fillStyle="#6B6663";fit(sub,CW,30,20,700);x.fillText(sub,L,236);
+  const vzs=[d.vznosN,...d.ts.map(t=>t.vn)].filter(n=>n>0);const nf=n=>n.toLocaleString("ru-RU").replace(/ /g," ");
+  const vzText=vzs.length?(new Set(vzs).size>1?"от ":"")+nf(Math.min(...vzs))+" ₽":"—";
+  const ps=d.ts.map(t=>t.pn);const pText=ps.length?(ps.length>1?"от ":"")+nf(Math.min(...ps))+" ₽/мес":"—";
   const ys=d.ts.map(t=>t.y);const sText=ys.length?(Math.min(...ys)===Math.max(...ys)?yrs(ys[0]):`${Math.min(...ys)}–${Math.max(...ys)} ${yearsWord(Math.max(...ys))}`):"—";
-  const by=1015,bh=170,gap=20,bw=(W-2*L-2*gap)/3;
-  [["ПЕРВЫЙ ВЗНОС",vzText,false],["ПЛАТЁЖ В МЕСЯЦ",pText,true],["СРОК ВЫКУПА",sText,false]].forEach(([lab,val,hot],i)=>{
-    const X=L+i*(bw+gap);rr(X,by,bw,bh,22);x.fillStyle=hot?RED:"#F4F2F1";x.fill();
-    x.fillStyle=hot?"rgba(255,255,255,.85)":"#6B6663";x.font=F(800,22);x.fillText(lab,X+24,by+50);
-    x.fillStyle=hot?"#fff":INK;const s=fit(val,bw-48,46,24,900);x.fillText(val,X+24,by+76+s);
+  const ch=132,gap=16;let y=276;
+  [["ПЕРВЫЙ ВЗНОС",vzText,false],["ПЛАТЁЖ В МЕСЯЦ",pText,true],["СРОК ВЫКУПА",sText,false]].forEach(([lab,val,hot])=>{
+    rr(L,y,CW,ch,20);x.fillStyle=hot?RED:"#F4F2F1";x.fill();
+    x.fillStyle=hot?"rgba(255,255,255,.85)":"#6B6663";x.font=F(800,20);x.fillText(lab,L+26,y+44);
+    x.fillStyle=hot?"#fff":INK;fit(val,CW-52,50,26,900);x.fillText(val,L+26,y+104);
+    y+=ch+gap;
   });
-  x.fillStyle=INK;x.font=F(800,30);x.fillText("Аренда с правом выкупа",L,1265);
-  x.fillStyle="#9A9490";x.font=F(700,22);x.fillText("без банков и справок о доходах",L,1302);
-  const right=[d.cname,d.phone].filter(Boolean).join("  ·  ");
-  if(right){x.fillStyle=RED;fit(right,470,30,18,800);x.textAlign="right";x.fillText(right,W-L,1265);x.textAlign="left";}
-  if(d.tg){x.fillStyle="#6B6663";fit(d.tg,470,24,16,700);x.textAlign="right";x.fillText(d.tg,W-L,1302);x.textAlign="left";}
+  x.fillStyle=INK;x.font=F(800,28);x.fillText("Аренда с правом выкупа",L,y+46);
+  x.fillStyle="#9A9490";x.font=F(700,20);x.fillText("без банков и справок о доходах",L,y+76);
+  const who=[d.cname,d.phone].filter(Boolean).join(" · ");
+  if(who){x.fillStyle=RED;fit(who,CW,30,18,800);x.fillText(who,L,H-80);}
+  if(d.tg){x.fillStyle="#6B6663";fit(d.tg,CW,24,16,700);x.fillText(d.tg,L,H-44);}
   $("card").src=c.toDataURL("image/jpeg",0.92);
 }
 
@@ -460,9 +459,10 @@ async function sendAlbumByIds(ids,text,btn){
   }
   throw{fatal:"не удалось опубликовать пост: "+last};
 }
+function albumHint(){const n=1+Math.min(photos.length,9);const h=$("albumHint");if(!h)return;h.textContent=pubMode()==="album"&&n>4?`⚠️ В альбоме ${n} картинок. Telegram точно ставит карточку большой сверху, если картинок до 4 (карточка + 3 фото). При ${n} раскладка может быть другой.`:"";}
 function orderedPhotos(){const p=photos[cover];return (p?[p,...photos.filter((_,i)=>i!==cover)]:[]).slice(0,9);}
-function pubMode(){const r=document.querySelector('input[name=pubMode]:checked');return r?r.value:"split";}
-document.querySelectorAll('input[name=pubMode]').forEach(r=>{if(load("pubMode")===r.value)r.checked=true;r.addEventListener("change",()=>store("pubMode",r.value));});
+function pubMode(){const r=document.querySelector('input[name=pubMode]:checked');return r?r.value:"album";}
+document.querySelectorAll('input[name=pubMode]').forEach(r=>{if(load("pubMode2")===r.value)r.checked=true;r.addEventListener("change",()=>{store("pubMode2",r.value);albumHint();});});
 async function publishReliable(text,btn){
   const extra=orderedPhotos();
   const ids=[];let skipped=0;
