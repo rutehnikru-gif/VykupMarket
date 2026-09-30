@@ -72,9 +72,9 @@ button.btn.alt{background:var(--soft);color:var(--fg);border:1px solid var(--lin
   <div class="grid">
     <form class="panel" id="f" autocomplete="off">
       <h2>Фото</h2>
-      <label class="file"><input type="file" id="photos" accept="image/*" multiple>📷 <span id="fileTxt">Добавить фото (3–5 шт.)</span></label>
+      <label class="file"><input type="file" id="photos" accept="image/*" multiple>📷 <span id="fileTxt">Добавить фото (до 4 шт.)</span></label>
       <div class="thumbs" id="thumbs"></div>
-      <p class="note" id="coverNote" hidden>Нажмите на фото, чтобы сделать его обложкой карточки.</p>
+      <p class="note" id="coverNote" hidden>Нажмите на фото, чтобы сделать его обложкой. Обложка идёт только в карточку, остальные фото альбомом под ней.</p>
 
       <h2>Автомобиль</h2>
       <label>Марка и модель<input type="text" id="model" value="Mercedes E200D"></label>
@@ -156,6 +156,7 @@ const c=$("c"),x=c.getContext("2d");
 const CAR_BODY=new Path2D("M10,118 L10,92 Q10,76 30,72 L108,62 L158,26 Q168,18 184,18 L268,18 Q284,18 296,28 L342,62 L372,68 Q392,72 392,92 L392,118 Q392,124 386,124 L352,124 A40,40 0 0 0 272,124 L136,124 A40,40 0 0 0 56,124 L16,124 Q10,124 10,118 Z");
 const CAR_WIN=new Path2D("M132,62 L172,32 Q178,28 186,28 L222,28 L222,62 Z M236,28 L266,28 Q276,28 284,36 L314,62 L236,62 Z");
 const F=(w,s)=>`${w} ${s}px Onest, "Segoe UI", Arial, sans-serif`;
+const MAXP=4;
 let photos=[]; // {file,img,url}
 let cover=0;
 let terms=[{y:5,p:"90 000",v:""},{y:4,p:"120 000",v:""},{y:3,p:"130 000",v:""}];
@@ -193,8 +194,9 @@ $("addTerm").onclick=()=>{const used=terms.map(t=>t.y);const free=[5,4,3,2,1].fi
 /* ---------- photos ---------- */
 $("photos").addEventListener("change",async e=>{
   const files=[...e.target.files];e.target.value="";
+  if(photos.length+files.length>MAXP)toast(`Максимум ${MAXP} фото: обложка + 3`);
   for(const f of files){
-    if(photos.length>=10)break;
+    if(photos.length>=MAXP)break;
     const url=URL.createObjectURL(f);const img=new Image();
     await new Promise(r=>{img.onload=r;img.onerror=r;img.src=url;});
     photos.push({file:f,img,url});
@@ -211,7 +213,8 @@ function drawThumbs(){
     b.appendChild(d);
   });
   $("coverNote").hidden=photos.length<2;
-  albumHint();$("fileTxt").textContent=photos.length?`Фото: ${photos.length} · добавить ещё`:"Добавить фото (3–5 шт.)";
+  albumHint();$("fileTxt").textContent=photos.length?`Фото: ${photos.length} из ${MAXP}`+(photos.length<MAXP?" · добавить ещё":""):`Добавить фото (до ${MAXP} шт.)`;
+  $("photos").closest("label").hidden=photos.length>=MAXP;
 }
 
 /* ---------- data ---------- */
@@ -459,8 +462,8 @@ async function sendAlbumByIds(ids,text,btn){
   }
   throw{fatal:"не удалось опубликовать пост: "+last};
 }
-function albumHint(){const n=1+Math.min(photos.length,9);const h=$("albumHint");if(!h)return;h.textContent=pubMode()==="album"&&n>4?`⚠️ В альбоме ${n} картинок. Telegram точно ставит карточку большой сверху, если картинок до 4 (карточка + 3 фото). При ${n} раскладка может быть другой.`:"";}
-function orderedPhotos(){const p=photos[cover];return (p?[p,...photos.filter((_,i)=>i!==cover)]:[]).slice(0,9);}
+function albumHint(){const n=1+orderedPhotos().length;const h=$("albumHint");if(!h)return;h.textContent=pubMode()==="album"&&n>4?`⚠️ В альбоме ${n} картинок. Telegram точно ставит карточку большой сверху, если картинок до 4 (карточка + 3 фото). При ${n} раскладка может быть другой.`:"";}
+function orderedPhotos(){return photos.filter((_,i)=>i!==cover).slice(0,MAXP-1);}
 function pubMode(){const r=document.querySelector('input[name=pubMode]:checked');return r?r.value:"album";}
 document.querySelectorAll('input[name=pubMode]').forEach(r=>{if(load("pubMode2")===r.value)r.checked=true;r.addEventListener("change",()=>{store("pubMode2",r.value);albumHint();});});
 async function publishReliable(text,btn){
